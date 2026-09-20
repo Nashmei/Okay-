@@ -3,84 +3,113 @@
 
 @implementation EORuntimeInspector
 
-+ (BOOL)isInterestingName:(NSString *)name {
-    if (name.length == 0) return NO;
++ (BOOL)interestingClassName:(NSString *)name {
     NSString *s = name.lowercaseString;
-    NSArray<NSString *> *keywords = @[@"expertoption", @"plot", @"chart", @"asset", @"candle", @"rate", @"timeframe", @"market", @"price", @"indicator"];
-    for (NSString *keyword in keywords) if ([s containsString:keyword]) return YES;
-    return NO;
-}
-
-+ (BOOL)isInterestingSelector:(NSString *)name {
-    if (name.length == 0) return NO;
-    NSString *s = name.lowercaseString;
-    NSArray<NSString *> *keywords = @[@"asset", @"candle", @"rate", @"price", @"timeframe", @"plot", @"chart", @"indicator", @"viewport"];
-    for (NSString *keyword in keywords) if ([s containsString:keyword]) return YES;
-    return NO;
-}
-
-+ (NSArray<NSString *> *)interestingClasses {
-    int count = objc_getClassList(NULL, 0);
-    if (count <= 0) return @[];
-    Class *classes = (__unsafe_unretained Class *)calloc((size_t)count, sizeof(Class));
-    if (!classes) return @[];
-    count = objc_getClassList(classes, count);
-    NSMutableArray<NSString *> *result = [NSMutableArray array];
-    for (int i = 0; i < count; i++) {
-        Class cls = classes[i];
-        if (!cls) continue;
-        NSString *name = NSStringFromClass(cls);
-        if ([self isInterestingName:name]) [result addObject:name];
+    NSArray *keys = @[@"expertoption", @"plot", @"candle", @"asset",
+                      @"rate", @"timeframe", @"chart", @"indicator"];
+    for (NSString *k in keys) {
+        if ([s containsString:k]) return YES;
     }
-    free(classes);
-    [result sortUsingSelector:@selector(localizedCaseInsensitiveCompare:)];
-    return result;
+    return NO;
 }
 
-+ (NSArray<NSString *> *)selectorsForClassNamed:(NSString *)className {
-    Class cls = NSClassFromString(className);
-    if (!cls) return @[];
-    NSMutableOrderedSet<NSString *> *result = [NSMutableOrderedSet orderedSet];
-    Class current = cls;
-    for (NSInteger depth = 0; current && depth < 4; depth++, current = class_getSuperclass(current)) {
++ (BOOL)interestingSelectorName:(NSString *)name {
+    NSString *s = name.lowercaseString;
+    NSArray *keys = @[@"asset", @"candle", @"rate", @"price",
+                      @"timeframe", @"viewport", @"indicator",
+                      @"plot", @"chart", @"callback"];
+    for (NSString *k in keys) {
+        if ([s containsString:k]) return YES;
+    }
+    return NO;
+}
+
++ (NSArray<NSString *> *)selectorsForClass:(Class)cls {
+    NSMutableOrderedSet<NSString *> *out = [NSMutableOrderedSet orderedSet];
+    for (Class cur = cls; cur; cur = class_getSuperclass(cur)) {
         unsigned int count = 0;
-        Method *methods = class_copyMethodList(current, &count);
+        Method *methods = class_copyMethodList(cur, &count);
         for (unsigned int i = 0; i < count; i++) {
-            NSString *name = NSStringFromSelector(method_getName(methods[i]));
-            if ([self isInterestingSelector:name]) [result addObject:name];
+            NSString *s = NSStringFromSelector(method_getName(methods[i]));
+            if ([self interestingSelectorName:s]) [out addObject:s];
         }
         free(methods);
+        if (out.count >= 80) break;
     }
-    return result.array;
+    return out.array;
 }
 
-+ (NSString *)summary {
-    NSArray<NSString *> *classes = [self interestingClasses];
-    NSUInteger selectorCount = 0;
-    NSMutableArray<NSString *> *priority = [NSMutableArray array];
-    for (NSString *name in classes) {
-        NSArray<NSString *> *selectors = [self selectorsForClassNamed:name];
-        selectorCount += selectors.count;
++ (NSString *)fullReport {
+    int count = objc_getClassList(NULL, 0);
+    if (count <= 0) return @"No Objective-C classes found.";
+
+    Class *classes = (__unsafe_unretained Class *)calloc((size_t)count, sizeof(Class));
+    if (!classes) return @"Unable to allocate runtime class list.";
+
+    count = objc_getClassList(classes, count);
+    NSMutableArray<NSString *> *names = [NSMutableArray array];
+
+    for (int i = 0; i < count; i++) {
+        NSString *name = NSStringFromClass(classes[i]);
+        if ([self interestingClassName:name]) [names addObject:name];
+    }
+    free(classes);
+
+    [names sortUsingSelector:@selector(localizedCaseInsensitiveCompare:)];
+
+    // Put ExpertOption/Plot candidates first so screenshots are immediately useful.
+    [names sortUsingComparator:^NSComparisonResult(NSString *a, NSString *b) {
+        BOOL ap = [a.lowercaseString containsString:@"expertoption"];
+        BOOL bp = [b.lowercaseString containsString:@"expertoption"];
+        if (ap != bp) return ap ? NSOrderedAscending : NSOrderedDescending;
+        BOOL apl = [a.lowercaseString containsString:@"plot"];
+        BOOL bpl = [b.lowercaseString containsString:@"plot"];
+        if (apl != bpl) return apl ? NSOrderedAscending : NSOrderedDescending;
+        return [a localizedCaseInsensitiveCompare:b];
+    }];
+
+    NSMutableString *report = [NSMutableString string];
+    [report appendFormat:@"EOSignal Probe v3\nRuntime classes: %d\nMatched classes: %lu\n\n",
+                         count, (unsigned long)names.count];
+
+    NSUInteger shown = 0;
+    for (NSString *name in names) {
+        Class cls = NSClassFromString(name);
+        if (!cls) continue;
+
+        NSArray<NSString *> *selectors = [self selectorsForClass:cls];
         NSString *lower = name.lowercaseString;
-        if ([lower containsString:@"expertoption"] || [lower containsString:@"plot"] || [lower containsString:@"candle"]) {
-            if (priority.count < 3) [priority addObject:name];
-        }
-    }
-    NSString *targets = priority.count > 0 ? [priority componentsJoinedByString:@", "] : @"none yet";
-    return [NSString stringWithFormat:@"Market classes: %lu\nSelectors: %lu\nTargets: %@", (unsigned long)classes.count, (unsigned long)selectorCount, targets];
-}
 
-+ (void)dumpMarketRuntime {
-    NSArray<NSString *> *classes = [self interestingClasses];
-    NSLog(@"[EOSignal] ===== Probe v2 =====");
-    NSLog(@"[EOSignal] market classes: %lu", (unsigned long)classes.count);
-    for (NSString *className in classes) {
-        NSArray<NSString *> *selectors = [self selectorsForClassNamed:className];
-        if (selectors.count == 0) continue;
-        NSLog(@"[EOSignal] CLASS %@", className);
-        for (NSString *selector in selectors) NSLog(@"[EOSignal]   - %@", selector);
+        BOOL priority = [lower containsString:@"expertoption"] ||
+                        [lower containsString:@"plot"] ||
+                        [lower containsString:@"candle"] ||
+                        [lower containsString:@"timeframe"];
+
+        if (!priority && selectors.count == 0) continue;
+
+        [report appendFormat:@"CLASS: %@\n", name];
+
+        Class superCls = class_getSuperclass(cls);
+        [report appendFormat:@"SUPER: %@\n",
+         superCls ? NSStringFromClass(superCls) : @"(none)"];
+
+        [report appendFormat:@"SELECTORS (%lu):\n",
+         (unsigned long)selectors.count];
+
+        if (selectors.count == 0) {
+            [report appendString:@"  (no matching ObjC selectors)\n"];
+        } else {
+            for (NSString *selector in selectors) {
+                [report appendFormat:@"  %@\n", selector];
+            }
+        }
+
+        [report appendString:@"\n"];
+        shown++;
+        if (shown >= 40) break;
     }
-    NSLog(@"[EOSignal] ===== End Probe v2 =====");
+
+    return report;
 }
 
 @end

@@ -5,27 +5,24 @@
 @implementation EOProbe
 
 + (void)start {
-    EOOverlayView *overlay = [EOOverlayView shared];
-    [overlay installWhenReady];
-    [overlay setStatus:@"Probe v2 starting…"];
-    [overlay setDetail:@"Mapping market runtime…"];
+    EOOverlayView *hud = [EOOverlayView shared];
+    [hud installWhenReady];
+    [hud setStatus:@"Probe v3 • scanning…"];
+    [hud setDetail:@"Waiting for EO Broker runtime…"];
 
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4.0*NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
         NSString *bundle = NSBundle.mainBundle.bundleIdentifier ?: @"?";
         if (![bundle isEqualToString:@"com.eoservices.eobrokerios"]) {
-            [overlay setStatus:@"Wrong target"];
-            [overlay setDetail:bundle];
+            [hud setStatus:@"Wrong target"];
+            [hud setDetail:bundle];
             return;
         }
 
-        NSString *summary = [EORuntimeInspector summary];
-        [overlay setStatus:@"EO Broker • Probe v2 ✓"];
-        [overlay setDetail:summary];
-        NSLog(@"[EOSignal] %@", summary);
-
-        dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
-            [EORuntimeInspector dumpMarketRuntime];
-        });
+        NSString *report = [EORuntimeInspector fullReport];
+        [hud setStatus:@"EO Broker • Probe v3 ✓"];
+        [hud setDetail:report];
+        NSLog(@"[EOSignal]\n%@", report);
     });
 }
 
