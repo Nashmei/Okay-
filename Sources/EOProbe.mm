@@ -6,17 +6,17 @@
 + (void)refresh {
     EOOverlayView *hud = [EOOverlayView shared];
     [hud installWhenReady];
-    [hud setStatus:@"EO Broker • Runtime Probe v6 ✓"];
+    [hud setStatus:@"EO Broker • Data Probe v7 ✓"];
     [hud setDetail:[EORuntimeInspector liveReport]];
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)),
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.75 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{ [self refresh]; });
 }
 + (void)start {
     EOOverlayView *hud = [EOOverlayView shared];
     [hud installWhenReady];
-    [hud setStatus:@"Runtime Probe v6 • starting…"];
-    [hud setDetail:@"Plot + controller + delegate + market fields + callbacks…"];
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)),
+    [hud setStatus:@"Data Probe v7 • starting…"];
+    [hud setDetail:@"Reading plot/controller data path…"];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.25 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
         NSString *bundle = NSBundle.mainBundle.bundleIdentifier ?: @"?";
         if (![bundle isEqualToString:@"com.eoservices.eobrokerios"]) {
