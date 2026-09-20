@@ -2,33 +2,101 @@
 #import <objc/runtime.h>
 
 @implementation EORuntimeInspector
+
 + (NSArray<NSString *> *)interestingClasses {
     int count = objc_getClassList(NULL, 0);
-    if (count <= 0) return @[];
-    Class *classes = (__unsafe_unretained Class *)calloc((size_t)count, sizeof(Class));
+
+    if (count <= 0) {
+        return @[];
+    }
+
+    Class *classes =
+        (__unsafe_unretained Class *)
+        calloc((size_t)count, sizeof(Class));
+
+    if (!classes) {
+        return @[];
+    }
+
     count = objc_getClassList(classes, count);
-    NSMutableArray *hits = [NSMutableArray array];
-    NSArray *needles = @[@"plot", @"market", @"asset", @"candle", @"chart", @"rate", @"timeframe"];
-    for (int i=0; i<count; i++) {
-        NSString *name = NSStringFromClass(classes[i]);
-        NSString *lower = name.lowercaseString;
-        for (NSString *n in needles) {
-            if ([lower containsString:n]) { [hits addObject:name]; break; }
+
+    NSMutableArray<NSString *> *results =
+        [NSMutableArray array];
+
+    NSArray<NSString *> *keywords = @[
+        @"plot",
+        @"market",
+        @"asset",
+        @"candle",
+        @"chart",
+        @"rate",
+        @"timeframe",
+        @"expertoption"
+    ];
+
+    for (int i = 0; i < count; i++) {
+        Class cls = classes[i];
+
+        if (!cls) {
+            continue;
+        }
+
+        NSString *name = NSStringFromClass(cls);
+
+        if (name.length == 0) {
+            continue;
+        }
+
+        NSString *lower =
+            name.lowercaseString;
+
+        for (NSString *keyword in keywords) {
+            if ([lower containsString:keyword]) {
+                [results addObject:name];
+                break;
+            }
         }
     }
+
     free(classes);
-    [hits sortUsingSelector:@selector(localizedCaseInsensitiveCompare:)];
-    return hits;
+
+    [results sortUsingSelector:
+        @selector(localizedCaseInsensitiveCompare:)];
+
+    return results;
 }
 
 + (NSString *)summary {
-    NSArray *hits = [self interestingClasses];
-    BOOL plot = NO;
-    NSString *first = nil;
-    for (NSString *s in hits) {
-        if ([s.lowercaseString containsString:@"plot"]) { plot = YES; first = s; break; }
+    NSArray<NSString *> *classes =
+        [self interestingClasses];
+
+    BOOL plotFound = NO;
+    NSString *interestingClass = nil;
+
+    for (NSString *name in classes) {
+        NSString *lower =
+            name.lowercaseString;
+
+        if ([lower containsString:@"plot"]) {
+            plotFound = YES;
+            interestingClass = name;
+            break;
+        }
     }
-    if (!first) first = hits.firstObject;
-    return [NSString stringWithFormat:@"Runtime classes: %lu\nPlot-like: %@\n%@", (unsigned long)hits.count, plot ? @"YES" : @"NO", first ?: @"No matching ObjC class yet"];
+
+    if (!interestingClass) {
+        interestingClass =
+            classes.firstObject;
+    }
+
+    return [NSString stringWithFormat:
+        @"Runtime classes: %lu\n"
+         "Plot-like: %@\n"
+         "%@",
+        (unsigned long)classes.count,
+        plotFound ? @"YES" : @"NO",
+        interestingClass ?: @"No matching ObjC class yet"
+    ];
 }
+
 @end
