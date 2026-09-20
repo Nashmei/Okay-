@@ -1,0 +1,8 @@
+Package: com.local.eosignal
+Name: EOSignal
+Version: 0.1.0
+Architecture: iphoneos-arm
+Description: Read-only runtime probe and signal HUD for EO Broker 86.1.0.
+Maintainer: local
+Author: local
+Section: Tweaks
