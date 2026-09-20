@@ -1,4 +1,4 @@
-name: Build Tweak
+name: Build EOSignal
 
 on:
   push:
@@ -10,110 +10,122 @@ jobs:
     runs-on: macos-latest
 
     steps:
-    - uses: actions/checkout@v4
+      - name: Checkout EOSignal
+        uses: actions/checkout@v4
 
-    - name: Install Dependencies
-      run: brew install ldid make
+      - name: Install Dependencies
+        run: |
+          brew install make ldid
 
-    - name: Setup Theos
-      run: |
-        echo "THEOS=$PWD/theos" >> $GITHUB_ENV
-        if [ ! -d "theos" ]; then
-          git clone --recursive https://github.com/theos/theos.git
-        fi
-        mkdir -p theos/sdks
-        if [ ! -d "theos/sdks/iPhoneOS16.5.sdk" ]; then
-          curl -L https://codeload.github.com/theos/sdks/zip/refs/heads/master -o sdks.zip
-          unzip -q sdks.zip -d theos/
-          mv theos/sdks-master/* theos/sdks/
-          rm -rf theos/sdks-master sdks.zip
-        fi
+      - name: Setup Theos
+        run: |
+          set -e
 
-    - name: Build Tweak
-      run: |
-        export THEOS=$PWD/theos
-        export PATH=$THEOS/bin:$PATH
-        make clean
-        make package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless
+          export THEOS="$GITHUB_WORKSPACE/theos"
+          echo "THEOS=$THEOS" >> "$GITHUB_ENV"
+          echo "$THEOS/bin" >> "$GITHUB_PATH"
 
-    - name: Extract dylib from deb (Rootless path)
-      run: |
-        # 1. العثور على ملف deb
-        DEB_FILE=$(ls packages/*.deb | head -n 1)
-        echo "📦 Found deb: $DEB_FILE"
-        
-        # 2. استخراج محتويات deb يدوياً
-        mkdir -p deb_extract
-        cd deb_extract
-        
-        # استخراج data.tar.lzma أو data.tar.xz
-        ar x ../$DEB_FILE
-        
-        # فك ضغط الملف المناسب
-        if [ -f data.tar.lzma ]; then
-          tar -xf data.tar.lzma
-        elif [ -f data.tar.xz ]; then
-          tar -xf data.tar.xz
-        elif [ -f data.tar.gz ]; then
-          tar -xzf data.tar.gz
-        else
-          echo "⚠️  No known data.tar format found"
-          exit 1
-        fi
-        
-        cd ..
-        
-        # 3. البحث عن الـ dylib في المسارات المحتملة
-        DYLIB_PATH=""
-        
-        # المسار الأول: Rootless (var/jb)
-        if [ -f "deb_extract/var/jb/Library/MobileSubstrate/DynamicLibraries/kammelnaTweak.dylib" ]; then
-          DYLIB_PATH="deb_extract/var/jb/Library/MobileSubstrate/DynamicLibraries/kammelnaTweak.dylib"
-          echo "✅ Found dylib in var/jb/ path"
-        # المسار الثاني: Rootful (Library)
-        elif [ -f "deb_extract/Library/MobileSubstrate/DynamicLibraries/kammelnaTweak.dylib" ]; then
-          DYLIB_PATH="deb_extract/Library/MobileSubstrate/DynamicLibraries/kammelnaTweak.dylib"
-          echo "✅ Found dylib in Library/ path"
-        # المسار الثالث: البحث العام
-        else
-          echo "🔍 Searching for dylib in extracted files..."
-          find deb_extract -name "*.dylib" -type f 2>/dev/null | head -5
-          DYLIB_PATH=$(find deb_extract -name "kammelnaTweak.dylib" -type f 2>/dev/null | head -1)
-        fi
-        
-        # 4. نسخ الـ dylib إلى مكان العمل
-        if [ -n "$DYLIB_PATH" ] && [ -f "$DYLIB_PATH" ]; then
-          cp "$DYLIB_PATH" ./kammelnaTweak.dylib
-          echo "✅ dylib copied successfully from: $DYLIB_PATH"
-        else
-          echo "❌ Could not find kammelnaTweak.dylib anywhere"
-          echo "🔍 Contents of deb_extract:"
-          ls -la deb_extract/
-          echo "🔍 Searching all files..."
-          find deb_extract -type f 2>/dev/null | head -30
-          exit 1
-        fi
-        
-        # 5. تنظيف الصلاحيات والتوقيع
-        echo "🔧 Cleaning entitlements and signature..."
-        codesign --remove-signature kammelnaTweak.dylib || true
-        ldid -S kammelnaTweak.dylib || true
-        strip -S kammelnaTweak.dylib || true
-        
-        # 6. التحقق من النظافة
-        codesign -d kammelnaTweak.dylib 2>/dev/null && echo "⚠️  Still signed!" || echo "✅ dylib is clean (not signed)"
-        
-        # 7. عرض حجم الملف للتأكد
-        ls -la kammelnaTweak.dylib
+          git clone --recursive --depth=1 https://github.com/theos/theos.git "$THEOS"
 
-    - name: Upload Clean dylib
-      uses: actions/upload-artifact@v4
-      with:
-        name: kammelnaTweak_clean.dylib
-        path: ./kammelnaTweak.dylib
+          mkdir -p "$THEOS/sdks"
 
-    - name: Upload deb (optional)
-      uses: actions/upload-artifact@v4
-      with:
-        name: kammelnaTweak.deb
-        path: ./packages/*.deb
+          curl -L \
+            https://codeload.github.com/theos/sdks/zip/refs/heads/master \
+            -o /tmp/theos-sdks.zip
+
+          unzip -q /tmp/theos-sdks.zip -d /tmp
+
+          cp -a /tmp/sdks-master/*.sdk "$THEOS/sdks/"
+
+          echo "Installed SDKs:"
+          ls -1 "$THEOS/sdks"
+
+      - name: Show Build Environment
+        run: |
+          echo "THEOS=$THEOS"
+          echo "Project:"
+          pwd
+
+          echo "Makefile:"
+          cat Makefile
+
+          echo "Sources:"
+          find Sources -maxdepth 2 -type f -print
+
+          echo "Available SDKs:"
+          ls -lah "$THEOS/sdks"
+
+          echo "Compiler:"
+          clang --version
+
+      - name: Build EOSignal dylib
+        run: |
+          set -e
+
+          export THEOS="$GITHUB_WORKSPACE/theos"
+          export PATH="$THEOS/bin:$PATH"
+
+          make clean
+          make FINALPACKAGE=1 -j2
+
+      - name: Locate EOSignal dylib
+        run: |
+          set -e
+
+          echo "Searching build output..."
+
+          find .theos -type f -name "*.dylib" -print || true
+
+          DYLIB_PATH="$(find .theos -type f -name 'EOSignal.dylib' | head -1)"
+
+          if [ -z "$DYLIB_PATH" ] || [ ! -f "$DYLIB_PATH" ]; then
+            echo "EOSignal.dylib was not generated."
+            echo "Contents of .theos:"
+            find .theos -type f -maxdepth 6 -print || true
+            exit 1
+          fi
+
+          echo "Found: $DYLIB_PATH"
+
+          cp "$DYLIB_PATH" "$GITHUB_WORKSPACE/EOSignal.dylib"
+
+      - name: Inspect dylib
+        run: |
+          set -e
+
+          echo "File:"
+          file EOSignal.dylib
+
+          echo
+          echo "Architectures:"
+          lipo -info EOSignal.dylib || true
+
+          echo
+          echo "Linked libraries:"
+          otool -L EOSignal.dylib
+
+          echo
+          echo "Deployment information:"
+          otool -l EOSignal.dylib | grep -A5 -E 'LC_BUILD_VERSION|LC_VERSION_MIN_IPHONEOS' || true
+
+          echo
+          echo "Size:"
+          ls -lh EOSignal.dylib
+
+      - name: Strip EOSignal dylib
+        run: |
+          set -e
+
+          strip -S EOSignal.dylib || true
+
+          echo "Final dylib:"
+          file EOSignal.dylib
+          ls -lh EOSignal.dylib
+
+      - name: Upload EOSignal dylib
+        uses: actions/upload-artifact@v4
+        with:
+          name: EOSignal-dylib
+          path: EOSignal.dylib
+          if-no-files-found: error
+          retention-days: 14
