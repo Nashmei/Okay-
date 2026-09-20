@@ -3,22 +3,20 @@
 #import "EORuntimeInspector.h"
 
 @implementation EOProbe
-
 + (void)refresh {
     EOOverlayView *hud = [EOOverlayView shared];
     [hud installWhenReady];
-    [hud setStatus:@"EO Broker • Live Probe v4 ✓"];
+    [hud setStatus:@"EO Broker • Runtime Probe v5 ✓"];
     [hud setDetail:[EORuntimeInspector liveReport]];
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)),
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.75 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{ [self refresh]; });
 }
-
 + (void)start {
     EOOverlayView *hud = [EOOverlayView shared];
     [hud installWhenReady];
-    [hud setStatus:@"Live Probe v4 • starting…"];
-    [hud setDetail:@"Waiting for visible market data…"];
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)),
+    [hud setStatus:@"Runtime Probe v5 • starting…"];
+    [hud setDetail:@"Locating RNExpertOptionMobilePlot / ExpertOptionPlotView…"];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
         NSString *bundle = NSBundle.mainBundle.bundleIdentifier ?: @"?";
         if (![bundle isEqualToString:@"com.eoservices.eobrokerios"]) {
@@ -29,5 +27,4 @@
         [self refresh];
     });
 }
-
 @end
